@@ -16,12 +16,19 @@ Newline-terminated ASCII lines at 115200 baud.
 |------------------|----------------|----------------------------------|
 | Python → Arduino | `PING`         | Connectivity check               |
 | Python → Arduino | `SET <value>`  | Set output value (0–255)         |
+| Python → Arduino | `LEFT`         | Point the chute to the left bin  |
+| Python → Arduino | `RIGHT`        | Point the chute to the right bin |
+| Python → Arduino | `OPEN`         | Open the box (bottle drops)      |
+| Python → Arduino | `CLOSE`        | Close the box                    |
 | Arduino → Python | `PONG`         | Reply to `PING`                  |
 | Arduino → Python | `OK`           | Command accepted                 |
 | Arduino → Python | `ERR <reason>` | Command rejected                 |
 
 Keep this table in sync with `firmware/tryand_firmware/tryand_firmware.ino`
 and `vision/src/tryand_vision/serial_link.py`.
+
+`LEFT`/`RIGHT`/`OPEN`/`CLOSE` are sent by `ArduinoControl`
+(`vision/src/tryand_vision/control.py`); the firmware must reply `OK` to each.
 
 ## Firmware
 
