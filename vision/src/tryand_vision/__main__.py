@@ -1,43 +1,90 @@
+"""Debug viewer: watch what the vision part sees and answers.
+
+This does NOT control the machine. The control logic (separate code on the Mac)
+uses `tryand_vision.vision.Vision` directly. Use this viewer to set up the
+camera and tune the settings.
+
+Keys in the video window:
+    q  quit
+    b  re-capture the background (take everything off the platform first!)
+    s  save the current frame to vision/data/ (useful to collect test images)
+"""
+
 import argparse
+import time
+from pathlib import Path
 
 import cv2
 
-from .detector import measure
-from .serial_link import ArduinoLink
+from .cameras import list_cameras, save_preview
+from .display import draw
+
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="tryand_vision")
-    parser.add_argument("--port", help="serial port of the Arduino")
-    parser.add_argument("--camera", type=int, default=0, help="camera index")
-    parser.add_argument("--no-serial", action="store_true", help="run without an Arduino")
+    parser.add_argument("--camera", type=int, default=0, help="camera index (see --list-cameras)")
+    parser.add_argument("--list-cameras", action="store_true",
+                        help="list available cameras, save a preview image of each, and exit")
+    parser.add_argument("--model", default="yolo11n.pt", help="YOLO model file")
+    parser.add_argument("--confidence", type=float, default=0.4,
+                        help="minimum YOLO confidence (0-1) to accept a detection")
+    parser.add_argument("--min-area", type=float, default=0.01,
+                        help="fraction of the image that must change to count as an object")
+    parser.add_argument("--show-mask", action="store_true",
+                        help="also show the black/white background-difference image")
     args = parser.parse_args()
 
-    if not args.no_serial and not args.port:
-        parser.error("--port is required unless --no-serial is given")
+    if args.list_cameras:
+        DATA_DIR.mkdir(exist_ok=True)
+        cams = list_cameras()
+        if not cams:
+            print("No cameras found. Check System Settings > Privacy & Security > Camera.")
+        for index, w, h in cams:
+            path = DATA_DIR / f"camera_{index}.jpg"
+            save_preview(index, str(path))
+            print(f"camera {index}: {w}x{h}  preview saved to {path}")
+        return
 
-    link = None if args.no_serial else ArduinoLink(args.port)
-    cap = cv2.VideoCapture(args.camera)
-    if not cap.isOpened():
-        raise SystemExit(f"cannot open camera {args.camera}")
+    from .vision import Vision  # imported here so --list-cameras doesn't load YOLO
 
+    print("Loading YOLO model (downloads on first run)...")
+    vision = Vision(args.camera, args.model, args.confidence, args.min_area)
+    vision.start()
+    print("Keep the platform empty for 2 seconds...")
+
+    last_printed = None
+    last_count = -1
     try:
         while True:
-            ok, frame = cap.read()
-            if not ok:
+            # Windows must be drawn from the main thread on macOS, so the
+            # viewer runs here and just *reads* what the vision thread produced.
+            vision.classify()  # raises if the vision thread crashed
+            frame, result, detections = vision.latest_frame()
+            if frame is not None and vision.frame_count != last_count:
+                last_count = vision.frame_count
+                if result != last_printed:
+                    print(f"-> {result.name}")
+                    last_printed = result
+                if args.show_mask and vision.classifier.presence.has_background:
+                    cv2.imshow("presence mask", vision.classifier.presence.object_mask(frame))
+                cv2.imshow("tryand", draw(frame, result, detections))
+
+            key = cv2.waitKey(10) & 0xFF
+            if key == ord("q"):
                 break
-            value = measure(frame)
-            if link:
-                link.set_value(value)
-            cv2.putText(frame, str(value), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.imshow("tryand", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            if key == ord("b"):
+                vision.recapture_background()
+                print("Background re-captured.")
+            if key == ord("s") and frame is not None:
+                DATA_DIR.mkdir(exist_ok=True)
+                path = DATA_DIR / f"frame_{int(time.time() * 1000)}.jpg"
+                cv2.imwrite(str(path), frame)
+                print(f"saved {path}")
     finally:
-        cap.release()
+        vision.stop()
         cv2.destroyAllWindows()
-        if link:
-            link.close()
 
 
 if __name__ == "__main__":
