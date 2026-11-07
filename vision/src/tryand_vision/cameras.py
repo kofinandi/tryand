@@ -9,15 +9,21 @@ import cv2
 
 
 def list_cameras(max_index: int = 6) -> list[tuple[int, int, int]]:
-    """Try camera indices 0..max_index-1 and return (index, width, height) for each that works."""
+    """Try camera indices 0, 1, 2, ... and return (index, width, height) for each that works.
+
+    macOS numbers cameras without gaps, so we stop at the first index that
+    does not exist (otherwise OpenCV prints a scary warning for each one).
+    """
     found = []
     for index in range(max_index):
         cap = cv2.VideoCapture(index)
-        if cap.isOpened():
-            ok, frame = cap.read()
-            if ok:
-                h, w = frame.shape[:2]
-                found.append((index, w, h))
+        if not cap.isOpened():
+            cap.release()
+            break
+        ok, frame = cap.read()
+        if ok:
+            h, w = frame.shape[:2]
+            found.append((index, w, h))
         cap.release()
     return found
 

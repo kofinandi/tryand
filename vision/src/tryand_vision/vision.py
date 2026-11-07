@@ -144,6 +144,11 @@ class Vision:
             return frame, self._result, list(self._detections)
 
     @property
+    def is_ready(self) -> bool:
+        """True once the camera is warm and the background is captured (doesn't wait)."""
+        return self._ready.is_set()
+
+    @property
     def frame_count(self) -> int:
         with self._lock:
             return self._frame_count

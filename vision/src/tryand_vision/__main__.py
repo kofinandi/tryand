@@ -17,27 +17,9 @@ from pathlib import Path
 import cv2
 
 from .cameras import list_cameras, save_preview
-from .detector import Result
+from .display import draw
 
-# BGR colours (OpenCV uses Blue-Green-Red order, not RGB)
-COLOURS = {
-    Result.NO_OBJECT: (200, 200, 200),  # grey
-    Result.BOTTLE: (0, 200, 0),  # green
-    Result.NO_BOTTLE: (0, 0, 230),  # red
-}
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-
-
-def draw(frame, result, detections):
-    for d in detections:
-        x1, y1, x2, y2 = d.box
-        colour = COLOURS[Result.BOTTLE] if d.label == "bottle" else (255, 150, 0)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), colour, 2)
-        cv2.putText(frame, f"{d.label} {d.confidence:.2f}", (x1, max(y1 - 8, 15)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2)
-    cv2.rectangle(frame, (0, 0), (frame.shape[1], 50), (0, 0, 0), -1)
-    cv2.putText(frame, result.name, (10, 37), cv2.FONT_HERSHEY_SIMPLEX, 1.2, COLOURS[result], 3)
-    return frame
 
 
 def main() -> None:
