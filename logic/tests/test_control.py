@@ -1,7 +1,7 @@
 import pytest
 
-from tryand_vision.control import ArduinoControl
-from tryand_vision.logic import Label, Side, SortingLogic
+from tryand_logic.control import ArduinoControl
+from tryand_logic.sorting import Label, Side, SortingLogic
 
 
 class FakeLink:

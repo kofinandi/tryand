@@ -9,6 +9,8 @@ Each call sends one line over serial and waits for the Arduino's `OK`
 (see the protocol table in the top-level README). `ArduinoControl` also has
 `move(side)`, so it can be passed straight to `SortingLogic`:
 
+    from tryand_vision.serial_link import ArduinoLink
+
     with ArduinoLink("COM3") as link:
         logic = SortingLogic(ArduinoControl(link))
 """
@@ -17,7 +19,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .logic import Side
+from .sorting import Side
 
 
 class _Link(Protocol):

@@ -1,4 +1,4 @@
-from tryand_vision.logic import Label, Side, SortingLogic, State
+from tryand_logic.sorting import Label, Side, SortingLogic, State
 
 
 class FakeControl:

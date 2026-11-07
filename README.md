@@ -5,6 +5,7 @@ A Python computer-vision component that controls an Arduino board over serial.
 ```
 .
 ├── vision/     Python package: camera capture, detection, serial link
+├── logic/      Python package: sorting decisions + left/right/open/close control API
 └── firmware/   Arduino sketch that receives commands from the vision side
 ```
 
@@ -28,7 +29,7 @@ Keep this table in sync with `firmware/tryand_firmware/tryand_firmware.ino`
 and `vision/src/tryand_vision/serial_link.py`.
 
 `LEFT`/`RIGHT`/`OPEN`/`CLOSE` are sent by `ArduinoControl`
-(`vision/src/tryand_vision/control.py`); the firmware must reply `OK` to each.
+(`logic/src/tryand_logic/control.py`); the firmware must reply `OK` to each.
 
 ## Firmware
 
@@ -50,3 +51,22 @@ python -m tryand_vision --port /dev/cu.usbmodemXXXX
 
 Use `--no-serial` to run the vision loop without a board attached.
 Run tests with `pytest`.
+
+## Logic
+
+```
+VISION --(none / object1 / object2)--> LOGIC --(left/right, open/close)--> CONTROL
+```
+
+- `sorting.py`: `SortingLogic` accepts a bottle once the same label is seen for
+  1.2 s, routes `object1` left and `object2` right, opens the box, closes it after
+  1.0 s, and waits for an empty box before the next bottle. Call
+  `update(label)` once per camera frame; it never blocks.
+- `control.py`: `ArduinoControl(link)` with `left()`, `right()`, `open()`,
+  `close()`; `link` is a `tryand_vision.serial_link.ArduinoLink`.
+
+```sh
+cd logic
+pip install -e ".[dev]"
+pytest
+```
