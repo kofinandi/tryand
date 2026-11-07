@@ -26,6 +26,10 @@ class ArduinoLink:
             raise ArduinoError(f"{line!r} -> {reply}")
         return reply
 
+    def send(self, command: str) -> str:
+        """Send one protocol line and return the reply (raises ArduinoError on ERR)."""
+        return self._request(command)
+
     def ping(self) -> bool:
         return self._request("PING") == "PONG"
 
