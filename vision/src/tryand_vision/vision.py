@@ -31,7 +31,7 @@ import time
 import cv2
 import numpy as np
 
-from .detector import BottleDetector, Classifier, Detection, PresenceDetector, Result
+from .detector import DEFAULT_MODEL, BottleDetector, Classifier, Detection, PresenceDetector, Result
 
 __all__ = ["Result", "Vision"]
 
@@ -40,8 +40,10 @@ class Vision:
     def __init__(
         self,
         camera: int = 0,
-        model: str = "yolo11n.pt",
+        model: str = DEFAULT_MODEL,
         confidence: float = 0.4,
+        bottle_confidence: float = 0.15,
+        zoom_out_pad: float = 0.5,
         min_area: float = 0.01,
         warmup_seconds: float = 2.0,
         classifier: Classifier | None = None,
@@ -52,7 +54,8 @@ class Vision:
         self.warmup_seconds = warmup_seconds
         self.classifier = classifier or Classifier(
             PresenceDetector(min_area_fraction=min_area),
-            BottleDetector(model, min_confidence=confidence),
+            BottleDetector(model, min_confidence=confidence, bottle_confidence=bottle_confidence,
+                           zoom_out_pad=zoom_out_pad),
         )
         # macOS only allows opening the camera from the main thread, so we
         # open it here, and only *read* from it in the background thread.

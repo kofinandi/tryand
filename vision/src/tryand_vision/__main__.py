@@ -27,9 +27,13 @@ def main() -> None:
     parser.add_argument("--camera", type=int, default=0, help="camera index (see --list-cameras)")
     parser.add_argument("--list-cameras", action="store_true",
                         help="list available cameras, save a preview image of each, and exit")
-    parser.add_argument("--model", default="yolo11n.pt", help="YOLO model file")
+    parser.add_argument("--model", default="yolov8s-worldv2.pt", help="YOLO model file")
     parser.add_argument("--confidence", type=float, default=0.4,
                         help="minimum YOLO confidence (0-1) to accept a detection")
+    parser.add_argument("--bottle-confidence", type=float, default=0.15,
+                        help="minimum confidence for bottles only (lower it if close-up bottles are missed)")
+    parser.add_argument("--zoom-out", type=float, default=0.5,
+                        help="retry on a zoomed-out frame when no bottle is found: border added per side as a fraction of the frame (0 = off, 1 = very close bottles)")
     parser.add_argument("--min-area", type=float, default=0.01,
                         help="fraction of the image that must change to count as an object")
     parser.add_argument("--show-mask", action="store_true",
@@ -50,7 +54,8 @@ def main() -> None:
     from .vision import Vision  # imported here so --list-cameras doesn't load YOLO
 
     print("Loading YOLO model (downloads on first run)...")
-    vision = Vision(args.camera, args.model, args.confidence, args.min_area)
+    vision = Vision(args.camera, args.model, args.confidence, args.bottle_confidence,
+                    args.zoom_out, args.min_area)
     vision.start()
     print("Keep the platform empty for 2 seconds...")
 

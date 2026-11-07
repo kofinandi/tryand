@@ -6,9 +6,11 @@ One bottle, step by step (default timings):
 
     WAITING     box empty
     CONFIRMING  a bottle is seen; it must stay the same label for `confirm_s` (1.2 s)
-    MOVING      chute turned left/right; wait `settle_s` (0.4 s) so the servo arrives
-    SORTING     box open; close it after `open_s` (1.0 s)
+    MOVING      chute turned left/right; wait `settle_s` (1.0 s) so the servo arrives
+    SORTING     box open; close it after `open_s` (2.0 s)
     CLEARING    box closed; wait until VISION sees it empty, then back to WAITING
+                (gives up after `clear_timeout_s` (5 s) and calls `on_clear_timeout`,
+                which the app uses to re-take the background picture)
     FAULT       CONTROL failed (ERR / no reply): box closed if possible, nothing
                 else is sent until `reset()` is called
 
@@ -83,12 +85,14 @@ DEFAULT_ROUTES: dict[Label, Side] = {
 class SortingLogic:
     control: Control
     confirm_s: float = 1.2
-    settle_s: float = 0.4
-    open_s: float = 1.0
+    settle_s: float = 1.0
+    open_s: float = 2.0
     grace_s: float = 0.3
+    clear_timeout_s: float | None = 5.0  # None disables the timeout
     routes: dict[Label, Side] = field(default_factory=lambda: dict(DEFAULT_ROUTES))
     on_sorted: Callable[[Label, Side], None] | None = None
     on_error: Callable[[Exception], None] | None = None
+    on_clear_timeout: Callable[[], None] | None = None
 
     state: State = field(default=State.WAITING, init=False)
     last_error: Exception | None = field(default=None, init=False)
@@ -152,11 +156,17 @@ class SortingLogic:
         elif self.state is State.SORTING:
             if _elapsed(self._t, now, self.open_s):
                 self.control.close()
+                self._t = now
                 self._go(State.CLEARING)
 
         elif self.state is State.CLEARING:
             if self._stable_change(label, now) is Label.NONE:
                 self._go(State.WAITING)
+            elif self.clear_timeout_s is not None and _elapsed(self._t, now, self.clear_timeout_s):
+                # Vision never saw an empty box: stop waiting so we don't hang forever.
+                self._go(State.WAITING)
+                if self.on_clear_timeout:
+                    self.on_clear_timeout()
 
     def _stable_change(self, label: Label, now: float) -> Label | None:
         """Return `label` once it has differed from the candidate for `grace_s`."""

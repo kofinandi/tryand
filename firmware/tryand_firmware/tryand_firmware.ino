@@ -23,8 +23,8 @@ const uint8_t CHUTE_PIN = 11;
 // If a door moves the wrong way, swap its CLOSED/OPEN values.
 const int TRAP_A_CLOSED = 0;
 const int TRAP_A_OPEN = 90;
-const int TRAP_B_CLOSED = 90;
-const int TRAP_B_OPEN = 0;
+const int TRAP_B_CLOSED = 80;
+const int TRAP_B_OPEN = -10;
 
 // Chute servo angles: centre is 45, left is 0, right is 90.
 // If LEFT/RIGHT are swapped on the real hardware, swap those two values.

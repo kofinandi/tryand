@@ -29,6 +29,8 @@ class FakeControl:
 
 def make(**kw):
     control = kw.pop("control", None) or FakeControl()
+    kw.setdefault("settle_s", 0.4)  # pinned: tests below assume these timings,
+    kw.setdefault("open_s", 1.0)    # not the (slower) hardware defaults
     return SortingLogic(control, **kw), control
 
 
@@ -190,3 +192,14 @@ def test_reset_after_fault():
     assert logic.state is State.WAITING and logic.last_error is None
     feed(logic, Label.NO_BOTTLE, 2.0, 3.2)
     assert control.calls[-1] == R
+
+
+def test_clearing_times_out_and_notifies():
+    logic, control = make()
+    fired = []
+    logic.on_clear_timeout = lambda: fired.append(1)
+    feed(logic, Label.BOTTLE, 0.0, 2.6)      # closed at 2.6, box never looks empty
+    feed(logic, Label.NO_BOTTLE, 2.7, 7.5)
+    assert logic.state is State.CLEARING and not fired
+    logic.update(Label.NO_BOTTLE, 7.7)
+    assert logic.state is State.WAITING and fired == [1]

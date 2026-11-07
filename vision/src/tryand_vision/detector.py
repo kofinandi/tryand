@@ -101,34 +101,93 @@ class Detection:
     box: tuple[int, int, int, int]  # x1, y1, x2, y2 in pixels
 
 
-class BottleDetector:
-    """Wraps a YOLO model pre-trained on the COCO dataset (which has a 'bottle' class).
+# The labels that count as the sorted item (Result.BOTTLE): a bottle or a cup.
+TARGET_LABELS = frozenset({"bottle", "cup"})
 
-    The model file (~6 MB) is downloaded automatically the first time.
+# Default model: YOLO-World, an "open vocabulary" YOLO that finds whatever the text
+# prompts describe. The plain COCO model (yolo11n.pt) never recognised a paper cup
+# lying on its side on the platform; YOLO-World with these prompts does.
+# Each prompt is mapped to the label the rest of the code uses.
+DEFAULT_MODEL = "yolov8s-worldv2.pt"
+WORLD_PROMPTS = {
+    "bottle": "bottle",
+    "plastic bottle": "bottle",
+    "cup": "cup",
+    "paper cup": "cup",
+}
+
+# Classes YOLO may report but that must never count as an object on the platform.
+IGNORED_LABELS = frozenset({"person"})
+
+
+class BottleDetector:
+    """Wraps a YOLO model that finds bottles and cups.
+
+    By default a YOLO-World model prompted with WORLD_PROMPTS (only bottles and cups
+    are reported; any *other* object is caught by PresenceDetector instead). A plain
+    COCO model such as yolo11n.pt can still be passed with `model_name`.
+    The model file is downloaded automatically the first time.
     """
 
-    def __init__(self, model_name: str = "yolo11n.pt", min_confidence: float = 0.4):
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL,
+        min_confidence: float = 0.4,
+        bottle_confidence: float = 0.15,
+        zoom_out_pad: float = 0.5,
+    ):
         # Imported here (not at the top) so the rest of the module, and the
         # tests, work without loading the heavy deep-learning libraries.
         from ultralytics import YOLO
 
         self.model = YOLO(model_name)
+        self.label_map: dict[str, str] = {}
+        if "world" in model_name.lower():
+            self.model.set_classes(list(WORLD_PROMPTS))
+            self.label_map = WORLD_PROMPTS
         self.min_confidence = min_confidence
+        # A bottle held close is cropped by the frame edge or fills it, and YOLO's
+        # confidence drops. Accept bottles and cups at a lower confidence than other objects.
+        self.bottle_confidence = min(bottle_confidence, min_confidence)
+        # Fraction of the frame size added on each side for the zoom-out retry
+        # (0.5 -> objects appear half as big). 0 turns the retry off.
+        self.zoom_out_pad = zoom_out_pad
 
     def detect(self, frame: np.ndarray) -> list[Detection]:
-        """Return every object YOLO recognises (bottles and others)."""
-        result = self.model(frame, conf=self.min_confidence, verbose=False)[0]
+        """Return every object YOLO recognises (bottles and others), except IGNORED_LABELS.
+
+        A bottle held very close fills the frame, which YOLO handles badly. If the
+        normal pass finds no bottle, look again at a zoomed-out copy (the frame
+        padded with grey borders) so a big bottle appears at a normal size.
+        """
+        detections = self._run(frame)
+        if not any(d.label in TARGET_LABELS for d in detections):
+            zoomed_out = self._run(frame, pad_fraction=self.zoom_out_pad)
+            detections += [d for d in zoomed_out if d.label in TARGET_LABELS]
+        return detections
+
+    def _run(self, frame: np.ndarray, pad_fraction: float = 0.0) -> list[Detection]:
+        h, w = frame.shape[:2]
+        pad_y, pad_x = int(h * pad_fraction), int(w * pad_fraction)
+        if pad_y or pad_x:
+            frame = cv2.copyMakeBorder(
+                frame, pad_y, pad_y, pad_x, pad_x, cv2.BORDER_CONSTANT, value=(114, 114, 114)
+            )
+        result = self.model(frame, conf=self.bottle_confidence, verbose=False)[0]
         detections = []
         for box in result.boxes:
             class_id = int(box.cls[0])
+            label, confidence = result.names[class_id], float(box.conf[0])
+            label = self.label_map.get(label, label)  # "paper cup" -> "cup"
+            if label in IGNORED_LABELS:
+                continue
+            if label not in TARGET_LABELS and confidence < self.min_confidence:
+                continue
             x1, y1, x2, y2 = (int(v) for v in box.xyxy[0])
-            detections.append(
-                Detection(
-                    label=result.names[class_id],
-                    confidence=float(box.conf[0]),
-                    box=(x1, y1, x2, y2),
-                )
-            )
+            # Map back to the original frame (undo the padding, stay inside the image).
+            x1, x2 = max(0, x1 - pad_x), min(w - 1, x2 - pad_x)
+            y1, y2 = max(0, y1 - pad_y), min(h - 1, y2 - pad_y)
+            detections.append(Detection(label=label, confidence=confidence, box=(x1, y1, x2, y2)))
         return detections
 
 
@@ -139,10 +198,10 @@ class BottleDetector:
 
 def decide(object_present: bool, detections: list[Detection]) -> Result:
     """Pure decision rule for a single frame. Easy to read and to test."""
-    if any(d.label == "bottle" for d in detections):
+    if any(d.label in TARGET_LABELS for d in detections):
         return Result.BOTTLE
     if object_present or detections:
-        # Something is there (background changed, or YOLO saw e.g. a "cup").
+        # Something is there (background changed, or YOLO saw e.g. a "knife").
         return Result.NO_BOTTLE
     return Result.NO_OBJECT
 

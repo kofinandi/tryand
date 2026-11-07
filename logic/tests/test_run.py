@@ -58,7 +58,7 @@ def test_label_from_vision():
 def make(script, crash_at=None, end=6.0):
     clock, link = FakeClock(), FakeLink()
     vision = FakeVision(clock, script, crash_at)
-    logic = SortingLogic(ArduinoControl(link))
+    logic = SortingLogic(ArduinoControl(link), settle_s=0.4, open_s=1.0)
     state = run(vision, logic, poll_s=0.05, clock=clock, sleep=clock.sleep,
                 should_stop=lambda: clock.t >= end)
     return state, link

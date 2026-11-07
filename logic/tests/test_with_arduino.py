@@ -50,7 +50,7 @@ def machine(monkeypatch):
     monkeypatch.setattr(serial_link.serial, "Serial", FakeFirmware)
     monkeypatch.setattr(serial_link.time, "sleep", lambda s: None)
     link = serial_link.ArduinoLink("fake")
-    logic = SortingLogic(ArduinoControl(link))
+    logic = SortingLogic(ArduinoControl(link), settle_s=0.4, open_s=1.0)
     return link, logic
 
 

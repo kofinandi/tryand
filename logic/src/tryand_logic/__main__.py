@@ -6,6 +6,8 @@
 
 Keep the platform EMPTY for the first seconds: vision takes its background picture then.
 Stop with Ctrl+C (or `q` in the video window with --show).
+With --show, `b` re-takes the background picture (platform must be empty); use it when
+the machine is stuck in "clearing" because vision keeps seeing something.
 
 Vision answers NO_OBJECT / BOTTLE / NO_BOTTLE. By default a BOTTLE goes LEFT and
 anything else (NO_BOTTLE) goes RIGHT; use --swap-sides to invert that.
@@ -59,10 +61,16 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--show", action="store_true", help="show the video with the current state")
     p.add_argument("--swap-sides", action="store_true", help="BOTTLE right, NO_BOTTLE left")
     p.add_argument("--confirm", type=float, default=1.2, help="seconds a bottle must be seen")
-    p.add_argument("--settle", type=float, default=0.4, help="seconds for the chute servo")
-    p.add_argument("--open", type=float, default=1.0, help="seconds the box stays open")
+    p.add_argument("--settle", type=float, default=1.0, help="seconds for the chute servo")
+    p.add_argument("--open", type=float, default=2.0, help="seconds the box stays open")
     p.add_argument("--grace", type=float, default=0.3, help="ignore camera blips shorter than this")
+    p.add_argument("--clear-timeout", type=float, default=5.0,
+                   help="give up waiting for an empty box after this many seconds (0 = never)")
     p.add_argument("--confidence", type=float, default=0.4, help="vision: YOLO confidence")
+    p.add_argument("--bottle-confidence", type=float, default=0.15,
+                   help="vision: min confidence for bottles only (lower if close-up bottles are missed)")
+    p.add_argument("--zoom-out", type=float, default=0.5,
+                   help="retry on a zoomed-out frame when no bottle is found: border added per side as a fraction of the frame (0 = off, 1 = very close bottles)")
     p.add_argument("--min-area", type=float, default=0.01, help="vision: min changed area")
     args = p.parse_args(argv)
     if not args.no_serial and not args.port:
@@ -89,6 +97,7 @@ def main(argv: list[str] | None = None) -> None:
         settle_s=args.settle,
         open_s=args.open,
         grace_s=args.grace,
+        clear_timeout_s=args.clear_timeout or None,
         routes={Label.BOTTLE: left, Label.NO_BOTTLE: right},
         on_sorted=lambda label, side: print(f"sorted {label.value} -> {side.value}"),
         on_error=lambda exc: print(f"FAULT: {exc!r} (box closed, machine stopped)"),
@@ -104,8 +113,20 @@ def main(argv: list[str] | None = None) -> None:
         if args.show:
             _show(vision, state, stop)
 
+    def on_clear_timeout() -> None:
+        print("[logic] box never looked empty: re-taking the background picture")
+        vision.recapture_background()
+
+    logic.on_clear_timeout = on_clear_timeout
+
     print("Loading camera and YOLO... keep the platform EMPTY.")
-    vision = Vision(camera=args.camera, confidence=args.confidence, min_area=args.min_area)
+    vision = Vision(
+        camera=args.camera,
+        confidence=args.confidence,
+        bottle_confidence=args.bottle_confidence,
+        zoom_out_pad=args.zoom_out,
+        min_area=args.min_area,
+    )
     try:
         with vision:
             vision.wait_until_ready()
@@ -138,7 +159,7 @@ def _show(vision, state: State, stop: list[bool]) -> None:
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         stop[0] = True
-    elif key == ord("b") and state is State.WAITING:
+    elif key == ord("b") and state in (State.WAITING, State.CLEARING):
         vision.recapture_background()
 
 
