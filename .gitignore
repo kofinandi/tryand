@@ -1,0 +1,37 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# --- Arduino ---
+# arduino-cli / IDE build output
+firmware/**/build/
+*.hex
+*.elf
+*.bin
+*.eep
+*.lst
+*.map
+
+# --- Vision data (keep the folder, not the contents) ---
+vision/data/*
+!vision/data/.gitkeep
+*.mp4
+*.avi
+
+# --- Editors / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
