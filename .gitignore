@@ -35,3 +35,6 @@ vision/data/*
 .idea/
 .vscode/
 *.swp
+
+# --- Model weights (downloaded automatically) ---
+*.pt

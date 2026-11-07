@@ -1,6 +1,6 @@
 """Sorting logic: sits between VISION and CONTROL.
 
-    VISION  --(label: none / object1 / object2)-->  LOGIC  --(left/right, open/close)-->  CONTROL
+    VISION  --(label: none / bottle / no_bottle)-->  LOGIC  --(left/right, open/close)-->  CONTROL
 
 One bottle, step by step (default timings):
 
@@ -32,8 +32,8 @@ class Label(str, Enum):
     """What VISION reports for one frame."""
 
     NONE = "none"
-    OBJECT1 = "object1"
-    OBJECT2 = "object2"
+    BOTTLE = "bottle"
+    NO_BOTTLE = "no_bottle"  # something that is not a bottle
 
 
 class Side(str, Enum):
@@ -58,14 +58,24 @@ class Control(Protocol):
     def close(self) -> None: ...
 
 
+def label_from_vision(result) -> Label:
+    """Convert vision's `tryand_vision.vision.Result` into a Label.
+
+    NO_OBJECT -> NONE, BOTTLE -> BOTTLE, NO_BOTTLE -> NO_BOTTLE.
+    Matched by name so this package does not need to import vision (and YOLO).
+    """
+    name = getattr(result, "name", str(result)).upper()
+    return Label.NONE if name == "NO_OBJECT" else Label[name]
+
+
 def _elapsed(start: float, now: float, duration: float) -> bool:
     """True once `duration` seconds have passed (tolerant to float rounding)."""
     return now - start >= duration - 1e-9
 
 
 DEFAULT_ROUTES: dict[Label, Side] = {
-    Label.OBJECT1: Side.LEFT,
-    Label.OBJECT2: Side.RIGHT,
+    Label.BOTTLE: Side.LEFT,
+    Label.NO_BOTTLE: Side.RIGHT,
 }
 
 
@@ -102,6 +112,10 @@ class SortingLogic:
         except Exception as exc:  # ArduinoError, serial errors, ...
             self._fault(exc)
         return self.state
+
+    def fail(self, exc: Exception) -> None:
+        """Report a problem from outside (e.g. the camera crashed): close the box and stop."""
+        self._fault(exc)
 
     def reset(self) -> None:
         """Leave FAULT (after fixing the problem) and start again from WAITING."""
