@@ -59,9 +59,12 @@ VISION --(none / object1 / object2)--> LOGIC --(left/right, open/close)--> CONTR
 ```
 
 - `sorting.py`: `SortingLogic` accepts a bottle once the same label is seen for
-  1.2 s, routes `object1` left and `object2` right, opens the box, closes it after
-  1.0 s, and waits for an empty box before the next bottle. Call
-  `update(label)` once per camera frame; it never blocks.
+  1.2 s, turns the chute (`object1` left, `object2` right — placeholders), waits
+  0.4 s for the servo, opens the box, closes it after 1.0 s, and waits for an
+  empty box before the next bottle. Camera blips shorter than 0.3 s are ignored.
+  If the Arduino fails (`ERR` / no reply) it closes the box and stops in
+  `State.FAULT` until `reset()`. Call `update(label)` once per camera frame; it
+  never blocks.
 - `control.py`: `ArduinoControl(link)` with `left()`, `right()`, `open()`,
   `close()`; `link` is a `tryand_vision.serial_link.ArduinoLink`.
 

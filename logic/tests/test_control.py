@@ -33,8 +33,7 @@ def test_move_maps_side_to_command():
 
 def test_logic_drives_arduino_commands():
     link = FakeLink()
-    logic = SortingLogic(ArduinoControl(link), confirm_s=1.2, open_s=1.0)
-    for t in (0.0, 0.6, 1.2):
+    logic = SortingLogic(ArduinoControl(link), confirm_s=1.2, settle_s=0.4, open_s=1.0)
+    for t in (0.0, 0.6, 1.2, 1.6, 2.6):
         logic.update(Label.OBJECT2, t)
-    logic.update(Label.OBJECT2, 2.2)
     assert link.sent == ["RIGHT", "OPEN", "CLOSE"]
