@@ -6,39 +6,66 @@ A Python computer-vision component that controls an Arduino board over serial.
 .
 ├── vision/     Python package: camera capture, detection, serial link
 ├── logic/      Python package: sorting decisions + left/right/open/close control API
-└── firmware/   Arduino sketch that receives commands from the vision side
+└── firmware/   Arduino sketch that drives the trapdoor and chute servos
 ```
 
 ## Serial protocol
 
 Newline-terminated ASCII lines at 115200 baud.
 
-| Direction        | Line           | Meaning                          |
-|------------------|----------------|----------------------------------|
-| Python → Arduino | `PING`         | Connectivity check               |
-| Python → Arduino | `SET <value>`  | Set output value (0–255)         |
-| Python → Arduino | `LEFT`         | Point the chute to the left bin  |
-| Python → Arduino | `RIGHT`        | Point the chute to the right bin |
-| Python → Arduino | `OPEN`         | Open the box (bottle drops)      |
-| Python → Arduino | `CLOSE`        | Close the box                    |
-| Arduino → Python | `PONG`         | Reply to `PING`                  |
-| Arduino → Python | `OK`           | Command accepted                 |
-| Arduino → Python | `ERR <reason>` | Command rejected                 |
+| Direction        | Line           | Meaning                                                  |
+|------------------|----------------|----------------------------------------------------------|
+| Python → Arduino | `PING`         | Connectivity check                                       |
+| Python → Arduino | `LEFT`         | Point the chute to the left bin (servo 0°)               |
+| Python → Arduino | `RIGHT`        | Point the chute to the right bin (servo 90°)             |
+| Python → Arduino | `OPEN`         | Open the box: both upper trapdoors open (bottle drops)   |
+| Python → Arduino | `CLOSE`        | Close the box: both upper trapdoors close                |
+| Arduino → Python | `PONG`         | Reply to `PING`                                          |
+| Arduino → Python | `OK`           | Command accepted, servos are moving                      |
+| Arduino → Python | `DONE <cmd>`   | Movement for `LEFT`/`RIGHT`/`OPEN`/`CLOSE` finished      |
+| Arduino → Python | `ERR <reason>` | Command rejected                                         |
+
+Moves are non-blocking: the Arduino answers `OK` straight away and sends
+`DONE <cmd>` once the servos arrive (about 0.3 s). `ArduinoLink` skips `DONE`
+lines when it waits for a reply, so callers that ignore them (such as
+`ArduinoControl`) are unaffected. On power-up the box is closed and the chute is
+centred (servo 45°).
 
 Keep this table in sync with `firmware/tryand_firmware/tryand_firmware.ino`
 and `vision/src/tryand_vision/serial_link.py`.
 
 `LEFT`/`RIGHT`/`OPEN`/`CLOSE` are sent by `ArduinoControl`
-(`logic/src/tryand_logic/control.py`); the firmware must reply `OK` to each.
+(`logic/src/tryand_logic/control.py`); the firmware replies `OK` to each.
+
+## Wiring
+
+Servo power comes from an external 5 V supply, **not** from the Arduino.
+The supply ground must be shared with an Arduino GND pin.
+
+| Servo           | Signal pin | Power (red)       | Ground (brown)        |
+|-----------------|------------|-------------------|-----------------------|
+| Trapdoor A      | D9         | external 5 V +    | external 5 V − / GND  |
+| Trapdoor B      | D10        | external 5 V +    | external 5 V − / GND  |
+| Chute           | D11        | external 5 V +    | external 5 V − / GND  |
+
+The two trapdoor servos are mounted mirrored: A travels 0→90° to open, B travels
+90→0°. Angles are calibrated with the constants at the top of the sketch.
 
 ## Firmware
 
-Requires [arduino-cli](https://arduino.github.io/arduino-cli/).
+Target board: **Arduino UNO R4 WiFi**. Requires
+[arduino-cli](https://arduino.github.io/arduino-cli/) and the `arduino:renesas_uno`
+core (`arduino-cli core install arduino:renesas_uno`). On Apple Silicon the core's
+x86 compiler needs Rosetta 2.
 
 ```sh
-arduino-cli compile --fqbn arduino:avr:uno firmware/tryand_firmware
-arduino-cli upload  --fqbn arduino:avr:uno -p /dev/cu.usbmodemXXXX firmware/tryand_firmware
+arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi firmware/tryand_firmware
+arduino-cli upload  --fqbn arduino:renesas_uno:unor4wifi -p /dev/cu.usbmodemXXXX firmware/tryand_firmware
 ```
+
+Close anything that has the serial port open (bench tool, vision, logic) before
+uploading. If an upload fails with "No device found", unplug and replug USB and
+retry.
 
 ## Vision
 
@@ -50,6 +77,12 @@ cd vision
 python3.12 -m venv ~/.venvs/tryand-vision && source ~/.venvs/tryand-vision/bin/activate
 pip install -e ".[dev]"
 python -m tryand_vision --camera 1 --show-mask   # debug viewer
+```
+
+Test the mechanism without a camera (`o` open, `c` close, `l` left, `r` right, `q` quit):
+
+```sh
+python -m tryand_vision.bench --port /dev/cu.usbmodemXXXX
 ```
 
 Keep the virtualenv outside the repo: the repo may live in iCloud Drive, which hides files
