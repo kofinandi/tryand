@@ -34,12 +34,15 @@ arduino-cli upload  --fqbn arduino:avr:uno -p /dev/cu.usbmodemXXXX firmware/trya
 
 ## Vision
 
+The vision part answers "NO_OBJECT / BOTTLE / NO_BOTTLE". The control logic on the Mac
+pulls answers from it via `tryand_vision.vision.Vision` (see [vision/GUIDE.md](vision/GUIDE.md)).
+
 ```sh
 cd vision
-python3 -m venv .venv && source .venv/bin/activate
+python3.12 -m venv ~/.venvs/tryand-vision && source ~/.venvs/tryand-vision/bin/activate
 pip install -e ".[dev]"
-python -m tryand_vision --port /dev/cu.usbmodemXXXX
+python -m tryand_vision --camera 1 --show-mask   # debug viewer
 ```
 
-Use `--no-serial` to run the vision loop without a board attached.
-Run tests with `pytest`.
+Keep the virtualenv outside the repo: the repo may live in iCloud Drive, which hides files
+and breaks Python's editable installs. Run tests with `pytest`.
